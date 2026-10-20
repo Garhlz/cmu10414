@@ -1,0 +1,19 @@
+[project]
+name = "hw0"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "mugrade",
+    "numpy>=2.4.6",
+]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "numdifftools>=0.11.1",
+    "pybind11>=3.1.0",
+    "pytest>=9.1.1",
+]
+
+[tool.uv.sources]
+mugrade = { git = "https://github.com/dlsyscourse/mugrade.git" }
