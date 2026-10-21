@@ -12,7 +12,28 @@ dev = [
     "mugrade",
     "numdifftools>=0.11.1",
     "pytest>=9.1.1",
+    "ruff>=0.17.1",
 ]
 
 [tool.uv.sources]
 mugrade = { git = "https://github.com/dlsys10714/mugrade.git" }
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# 课程骨架沿用旧式 typing 写法，并通过模块导入隐式重新导出部分名称。
+# 保留这些接口，避免为了新版风格规则改动教学框架的公共 API。
+ignore = [
+    "F401",   # 导入的名称可能用于从模块隐式重新导出
+    "I001",   # 上游包初始化顺序可能用于规避循环导入
+    "RUF013", # 课程骨架允许默认值为 None 的隐式 Optional
+    "UP006",  # 保留 typing.List/Tuple/Dict
+    "UP031",  # 保留上游代码中的百分号字符串格式化
+    "UP035",  # 保留从 typing 导入旧式泛型
+    "UP045",  # 保留 Optional[T]，不强制改成 T | None
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 官方测试中保留了一些只为构造计算过程、但未在断言中使用的局部变量。
+"tests/**" = ["F841", "RUF059"]
