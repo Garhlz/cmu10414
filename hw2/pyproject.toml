@@ -1,0 +1,42 @@
+[project]
+name = "hw2"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.4.6",
+]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "mugrade",
+    "pytest>=9.1.1",
+    "ruff>=0.17.1",
+]
+
+[tool.uv.sources]
+mugrade = { git = "https://github.com/dlsys10714/mugrade.git" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+
+[tool.ruff.lint]
+# 只启用基础语法、导入和未定义名称检查，避免新版 Ruff 的风格规则
+# 淹没课程骨架中有意保留的旧式写法。
+select = ["E4", "E7", "E9", "F"]
+# 课程骨架沿用旧式 typing 写法，并通过模块导入隐式重新导出部分名称。
+# 保留这些接口，避免仅为新版风格规则修改教学框架的公共 API。
+ignore = [
+    "E402",   # 测试和应用会在修改 sys.path 后导入项目模块
+    "F401",   # 导入的名称可能用于从模块隐式重新导出
+    "F403",   # 官方测试使用星号导入应用中的作业函数
+    "F405",   # 星号导入的名称由课程骨架提供
+    "F841",   # 部分预留变量会在完成相应题目后使用
+]
+
+[tool.ruff.lint.per-file-ignores]
+# 官方测试中保留了一些用于构造计算过程但未在断言中使用的局部变量。
+"tests/**" = ["F821"]
