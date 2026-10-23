@@ -1,0 +1,28 @@
+# 本机环境与编辑器设置
+.venv/
+.env
+.vscode/
+.idea/
+.DS_Store
+
+# Python 与开发工具缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
+
+# 本机编译产物和课程打包文件
+*.so
+*.o
+*.a
+build/
+dist/
+compile_commands.json
+hw3.tar.gz
+core
+core.*
