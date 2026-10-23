@@ -19,17 +19,17 @@ class EWiseAdd(TensorOp):
     只接收 a、b 的底层 NDArray 并完成真正的数值运算。
     """
 
-    def compute(self, a: NDArray, b: NDArray):
+    def compute(self, a: NDArray, b: NDArray) -> NDArray:
         # 正向路径第 6 步：NumPy 的 + 在底层数组上执行逐元素相加。
         return a + b
 
-    def gradient(self, out_grad: Tensor, node: Tensor):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor, Tensor]:
         # 反向路径第 6a 步：若 z=a+b，则 dz/da=dz/db=1，因此两个输入
         # 收到的梯度贡献都等于上游梯度 out_grad。返回顺序必须与 inputs 一致。
         return out_grad, out_grad
 
 
-def add(a, b):
+def add(a: Tensor, b: Tensor) -> Tensor:
     """函数式加法接口；效果与 Tensor 之间使用 ``a + b`` 相同。"""
     # EWiseAdd() 创建算子实例；紧随其后的 (a, b) 调用实例的 __call__。
     return EWiseAdd()(a, b)
@@ -38,54 +38,54 @@ def add(a, b):
 class AddScalar(TensorOp):
     """Tensor 与 Python 标量的逐元素加法。"""
 
-    def __init__(self, scalar):
+    def __init__(self, scalar: float) -> None:
         # 普通标量不是计算图输入，直接作为算子对象的配置保存。
         self.scalar = scalar
 
-    def compute(self, a: NDArray):
+    def compute(self, a: NDArray) -> NDArray:
         # NumPy 会把 scalar 广播到 a 的形状后逐元素相加。
         return a + self.scalar
 
-    def gradient(self, out_grad: Tensor, node: Tensor):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor]:
         # 若 z=a+c 且 c 是常量，则 dz/da=1；常量不需要返回梯度。
         return out_grad
 
 
-def add_scalar(a, scalar):
+def add_scalar(a: Tensor, scalar: float) -> Tensor:
     return AddScalar(scalar)(a)
 
 
 class EWiseMul(TensorOp):
     """两个 Tensor 的逐元素乘法。"""
 
-    def compute(self, a: NDArray, b: NDArray):
+    def compute(self, a: NDArray, b: NDArray) -> NDArray:
         return a * b
 
-    def gradient(self, out_grad: Tensor, node: Tensor):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor, Tensor]:
         # 元组解包：node.inputs 中的两个元素分别赋给 lhs 和 rhs。
         lhs, rhs = node.inputs
         return out_grad * rhs, out_grad * lhs
 
 
-def multiply(a, b):
+def multiply(a: Tensor, b: Tensor) -> Tensor:
     return EWiseMul()(a, b)
 
 
 class MulScalar(TensorOp):
     """Tensor 与 Python 标量的逐元素乘法。"""
 
-    def __init__(self, scalar):
+    def __init__(self, scalar: float) -> None:
         self.scalar = scalar
 
-    def compute(self, a: NDArray):
+    def compute(self, a: NDArray) -> NDArray:
         return a * self.scalar
 
-    def gradient(self, out_grad: Tensor, node: Tensor):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor]:
         # 尾随逗号表示返回单元素元组，以便与多输入算子的接口保持一致。
         return (out_grad * self.scalar,)
 
 
-def mul_scalar(a, scalar):
+def mul_scalar(a: Tensor, scalar: float) -> Tensor:
     return MulScalar(scalar)(a)
 
 
@@ -97,7 +97,7 @@ class EWisePow(TensorOp):
         return array_api.pow(a, b)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor, Tensor]:
         ### BEGIN YOUR SOLUTION
         # ** 是 Python 的幂运算符；Tensor.__pow__ 会把它转换为 Needle 算子。
         lhs, rhs = node.inputs
@@ -106,14 +106,14 @@ class EWisePow(TensorOp):
         ### END YOUR SOLUTION
 
 
-def power(a, b):
+def power(a: Tensor, b: Tensor) -> Tensor:
     return EWisePow()(a, b)
 
 
 class PowerScalar(TensorOp):
-    """逐元素计算 Tensor 的整数次幂。"""
+    """逐元素计算 Tensor 的标量次幂，也支持平方根等分数指数。"""
 
-    def __init__(self, scalar: int):
+    def __init__(self, scalar: float) -> None:
         self.scalar = scalar
 
     def compute(self, a: NDArray) -> NDArray:
@@ -121,26 +121,26 @@ class PowerScalar(TensorOp):
         return array_api.pow(a, self.scalar)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         # node.inputs 是序列；一元算子的唯一输入位于索引 0。
         return out_grad * self.scalar * (node.inputs[0] ** (self.scalar - 1))
         ### END YOUR SOLUTION
 
 
-def power_scalar(a, scalar):
+def power_scalar(a: Tensor, scalar: float) -> Tensor:
     return PowerScalar(scalar)(a)
 
 
 class EWiseDiv(TensorOp):
     """两个 Tensor 的逐元素真除法。"""
 
-    def compute(self, a, b):
+    def compute(self, a: NDArray, b: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return a / b
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor, Tensor]:
         ### BEGIN YOUR SOLUTION
         lhs, rhs = node.inputs
         # rhs ** -2 表示 1 / rhs^2；负指数同样通过 Tensor.__pow__ 建图。
@@ -148,38 +148,38 @@ class EWiseDiv(TensorOp):
         ### END YOUR SOLUTION
 
 
-def divide(a, b):
+def divide(a: Tensor, b: Tensor) -> Tensor:
     return EWiseDiv()(a, b)
 
 
 class DivScalar(TensorOp):
     """Tensor 除以 Python 标量。"""
 
-    def __init__(self, scalar):
+    def __init__(self, scalar: float) -> None:
         self.scalar = scalar
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return a / self.scalar
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         return out_grad / self.scalar
         ### END YOUR SOLUTION
 
 
-def divide_scalar(a, scalar):
+def divide_scalar(a: Tensor, scalar: float) -> Tensor:
     return DivScalar(scalar)(a)
 
 
 class Transpose(TensorOp):
     """交换 Tensor 的两个轴；未指定时交换最后两个轴。"""
 
-    def __init__(self, axes: Optional[tuple] = None):
+    def __init__(self, axes: tuple[int, int] | None = None) -> None:
         self.axes = axes
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         # None 是 Python 表示“未提供值”的单例对象，应使用 is None 判断。
         if self.axes is None:
@@ -191,40 +191,40 @@ class Transpose(TensorOp):
         return array_api.swapaxes(a, axis1, axis2)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         # 同一对轴交换两次会恢复原状，因此转置的逆操作仍是自身。
         return transpose(out_grad, self.axes)
         ### END YOUR SOLUTION
 
 
-def transpose(a, axes=None):
+def transpose(a: Tensor, axes: tuple[int, int] | None = None) -> Tensor:
     return Transpose(axes)(a)
 
 
 class Reshape(TensorOp):
     """在元素总数不变的前提下修改 Tensor 形状。"""
 
-    def __init__(self, shape):
+    def __init__(self, shape: tuple[int, ...]) -> None:
         self.shape = shape
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.reshape(a, self.shape)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         # 反向传播只需把梯度恢复成输入的原始形状。
         return reshape(out_grad, node.inputs[0].shape)
         ### END YOUR SOLUTION
 
 
-def reshape(a, shape):
+def reshape(a: Tensor, shape: tuple[int, ...]) -> Tensor:
     return Reshape(shape)(a)
 
 
-def sum_to_shape(grad, target_shape):
+def sum_to_shape(grad: Tensor, target_shape: tuple[int, ...]) -> Tensor:
     """沿广播产生的维度求和，并把梯度恢复为 target_shape。"""
 
     # NumPy 从最右侧对齐形状；较短形状等价于在左侧补若干个 1。
@@ -249,15 +249,15 @@ def sum_to_shape(grad, target_shape):
 class BroadcastTo(TensorOp):
     """依据 NumPy 广播规则把 Tensor 扩展到目标形状。"""
 
-    def __init__(self, shape):
+    def __init__(self, shape: tuple[int, ...]) -> None:
         self.shape = shape
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.broadcast_to(a, self.shape)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         input_shape = node.inputs[0].shape
         # 广播的反向过程是在所有被复制的轴上累加梯度。
@@ -265,22 +265,22 @@ class BroadcastTo(TensorOp):
         ### END YOUR SOLUTION
 
 
-def broadcast_to(a, shape):
+def broadcast_to(a: Tensor, shape: tuple[int, ...]) -> Tensor:
     return BroadcastTo(shape)(a)
 
 
 class Summation(TensorOp):
     """沿指定轴求和；axes=None 表示对所有元素求和。"""
 
-    def __init__(self, axes: Optional[tuple] = None):
+    def __init__(self, axes: int | tuple[int, ...] | None = None) -> None:
         self.axes = axes
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.sum(a, axis=self.axes)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         input_shape = node.inputs[0].shape
 
@@ -308,19 +308,19 @@ class Summation(TensorOp):
         ### END YOUR SOLUTION
 
 
-def summation(a, axes=None):
+def summation(a: Tensor, axes: int | tuple[int, ...] | None = None) -> Tensor:
     return Summation(axes)(a)
 
 
 class MatMul(TensorOp):
     """矩阵乘法，支持 NumPy 风格的批次维度广播。"""
 
-    def compute(self, a, b):
+    def compute(self, a: NDArray, b: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.matmul(a, b)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> tuple[Tensor, Tensor]:
         ### BEGIN YOUR SOLUTION
         lhs, rhs = node.inputs
         # 对最后两个矩阵轴应用 d(AB)/dA = dY B^T、d(AB)/dB = A^T dY。
@@ -332,73 +332,73 @@ class MatMul(TensorOp):
         ### END YOUR SOLUTION
 
 
-def matmul(a, b):
+def matmul(a: Tensor, b: Tensor) -> Tensor:
     return MatMul()(a, b)
 
 
 class Negate(TensorOp):
     """逐元素取相反数。"""
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return -a
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         return -1 * out_grad
         ### END YOUR SOLUTION
 
 
-def negate(a):
+def negate(a: Tensor) -> Tensor:
     return Negate()(a)
 
 
 class Log(TensorOp):
     """逐元素计算自然对数。"""
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.log(a)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         return out_grad / node.inputs[0]
         ### END YOUR SOLUTION
 
 
-def log(a):
+def log(a: Tensor) -> Tensor:
     return Log()(a)
 
 
 class Exp(TensorOp):
     """逐元素计算自然指数。"""
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.exp(a)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         return out_grad * exp(node.inputs[0])
         ### END YOUR SOLUTION
 
 
-def exp(a):
+def exp(a: Tensor) -> Tensor:
     return Exp()(a)
 
 
 class ReLU(TensorOp):
     """逐元素计算 max(a, 0)。"""
 
-    def compute(self, a):
+    def compute(self, a: NDArray) -> NDArray:
         ### BEGIN YOUR SOLUTION
         return array_api.maximum(a, 0)
         ### END YOUR SOLUTION
 
-    def gradient(self, out_grad, node):
+    def gradient(self, out_grad: Tensor, node: Tensor) -> Tensor:
         ### BEGIN YOUR SOLUTION
         # Needle Tensor 尚未实现 __gt__，因此读取底层数组来构造布尔掩码。
         input_data = node.inputs[0].realize_cached_data()
@@ -410,5 +410,5 @@ class ReLU(TensorOp):
         ### END YOUR SOLUTION
 
 
-def relu(a):
+def relu(a: Tensor) -> Tensor:
     return ReLU()(a)

@@ -1,21 +1,25 @@
 """自动微分系统的核心数据结构与反向传播算法。"""
 
+from __future__ import annotations
+
+from collections.abc import Sequence
 from collections import namedtuple
-from typing import Dict, List, NamedTuple, Optional, Tuple, Union
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union, Self
+from numpy.typing import ArrayLike, DTypeLike
 
 import numpy
 
 import needle
 from needle import init
 
-from .backend_numpy import Device, all_devices, cpu
+from .backend_numpy import CPUDevice, Device, all_devices, cpu
 
 # 是否启用惰性求值。关闭时，创建计算图节点后会立刻计算并缓存结果。
 LAZY_MODE = False
 # 用于调试当前存活的 Value/Tensor 对象数量。
 TENSOR_COUNTER = 0
 
-# HW1 暂时使用 NumPy 作为数组后端；后续作业会替换为自行实现的后端。
+# HW1/HW2 使用 NumPy 作为数组后端；后续作业会替换为自行实现的后端。
 import numpy as array_api
 
 NDArray = numpy.ndarray
@@ -24,11 +28,11 @@ NDArray = numpy.ndarray
 class Op:
     """计算图中的算子基类，例如加法、矩阵乘法和 ReLU。"""
 
-    def __call__(self, *args):
+    def __call__(self, *args: Any, **kwargs: Any) -> Value:
         # *args 将任意数量的位置参数收集为元组，便于统一处理一元和多元算子。
         raise NotImplementedError()
 
-    def compute(self, *args: Tuple[NDArray]):
+    def compute(self, *args: Any) -> Any:
         """执行算子的正向计算。
 
         此处接收底层 NDArray，而不是 Tensor。Tensor 负责维护计算图，
@@ -38,7 +42,7 @@ class Op:
 
     def gradient(
         self, out_grad: "Value", node: "Value"
-    ) -> Union["Value", Tuple["Value"]]:
+    ) -> Value | tuple[Value, ...] | list[Value]:
         """根据上游梯度计算当前算子各输入的梯度贡献。
 
         若当前节点表示 z = f(x, y)，则 out_grad 是 dL/dz。本方法应用
@@ -48,7 +52,7 @@ class Op:
         """
         raise NotImplementedError()
 
-    def gradient_as_tuple(self, out_grad: "Value", node: "Value") -> Tuple["Value"]:
+    def gradient_as_tuple(self, out_grad: Value, node: Value) -> tuple[Value, ...]:
         """调用 gradient，并把不同形式的返回值统一转换为元组。"""
         output = self.gradient(out_grad, node)
         if isinstance(output, tuple):
@@ -75,7 +79,7 @@ class TensorOp(Op):
     因此，调用算子对象不仅执行数值运算，还会把这次运算记录到计算图中。
     """
 
-    def __call__(self, *args):
+    def __call__(self, *args: Value) -> Tensor:
         # 正向路径第 3 步：op(a, b) 会被 Python 转换为 op.__call__(a, b)。
         # 此时 self 是具体算子对象，args 是包含输入 Tensor 的元组 (a, b)。
         # 这里不直接调用 compute，因为必须先创建节点并保存计算图关系。
@@ -85,7 +89,7 @@ class TensorOp(Op):
 class TensorTupleOp(Op):
     """输出 TensorTuple 的算子基类。"""
 
-    def __call__(self, *args):
+    def __call__(self, *args: Value) -> TensorTuple:
         return TensorTuple.make_from_op(self, args)
 
 
@@ -95,12 +99,14 @@ class Value:
     # Optional[Op] 表示值可以是 Op 或 None；叶子节点的 op 为 None。
     op: Optional[Op]
     # 引号中的 "Value" 是前向引用：类尚未完成定义时也可用于类型标注。
-    inputs: List["Value"]
+    inputs: Sequence[Value]
     # 动态计算过程中缓存的底层数组，避免重复执行正向计算。
-    cached_data: NDArray
+    # Tensor 缓存数组，TensorTuple 缓存数组元组，尚未求值时为 None。
+    # 这层使用 Any，由具体算子的 compute 与公开 Tensor 接口约束数据类型。
+    cached_data: Any
     requires_grad: bool
 
-    def realize_cached_data(self):
+    def realize_cached_data(self) -> Any:
         """按需执行正向数值计算并返回缓存结果。
 
         计算图节点保存的是 Tensor 输入，而具体算子的 compute 接收底层数组。
@@ -118,11 +124,11 @@ class Value:
         )
         return self.cached_data
 
-    def is_leaf(self):
+    def is_leaf(self) -> bool:
         """没有生成算子的节点即为叶子节点，通常是用户创建的输入。"""
         return self.op is None
 
-    def __del__(self):
+    def __del__(self) -> None:
         # global 表示修改模块级变量，而不是创建同名局部变量。
         global TENSOR_COUNTER
         TENSOR_COUNTER -= 1
@@ -130,12 +136,12 @@ class Value:
     def _init(
         self,
         op: Optional[Op],
-        inputs: List["Tensor"],
+        inputs: Sequence[Value],
         *,  # * 之后的参数只能通过关键字传入，防止位置参数含义混淆。
         num_outputs: int = 1,
-        cached_data: List[object] = None,
+        cached_data: Any = None,
         requires_grad: Optional[bool] = None,
-    ):
+    ) -> None:
         """初始化一个 Value 节点及其计算图元数据。"""
         global TENSOR_COUNTER
         TENSOR_COUNTER += 1
@@ -151,7 +157,7 @@ class Value:
         self.requires_grad = requires_grad
 
     @classmethod
-    def make_const(cls, data, *, requires_grad=False):
+    def make_const(cls, data: Any, *, requires_grad: bool = False) -> Self:
         """创建不依赖其他节点的常量值。"""
         # __new__ 只分配对象而不调用 __init__，便于统一交给 _init 初始化。
         value = cls.__new__(cls)
@@ -164,7 +170,7 @@ class Value:
         return value
 
     @classmethod
-    def make_from_op(cls, op: Op, inputs: List["Value"]):
+    def make_from_op(cls, op: Op, inputs: Sequence[Value]) -> Self:
         """根据算子及输入创建新的计算图节点。"""
         value = cls.__new__(cls)
         value._init(op, inputs)
@@ -180,31 +186,31 @@ class Value:
 class TensorTuple(Value):
     """一组 Tensor 的图节点；为简化实现，不支持嵌套 TensorTuple。"""
 
-    def __len__(self):
+    def __len__(self) -> int:
         cdata = self.realize_cached_data()
         return len(cdata)
 
-    def __getitem__(self, index: int):
+    def __getitem__(self, index: int) -> Tensor:
         # 实现 [] 运算符，例如 tensor_tuple[0]。
         return needle.ops.tuple_get_item(self, index)
 
-    def tuple(self):
+    def tuple(self) -> tuple[Tensor, ...]:
         return tuple([x for x in self])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         # __repr__ 返回面向开发者的对象表示，交互式环境会自动调用它。
         return "needle.TensorTuple" + str(self.tuple())
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.__repr__()
 
-    def __add__(self, other):
+    def __add__(self, other: TensorTuple) -> TensorTuple:
         assert isinstance(other, TensorTuple)
         assert len(self) == len(other)
         # * 将列表中的元素解包为 make_tuple 的多个位置参数。
         return needle.ops.make_tuple(*[self[i] + other[i] for i in range(len(self))])
 
-    def detach(self):
+    def detach(self) -> TensorTuple:
         """共享底层数据，但创建一个与原计算图断开的新节点。"""
         return TensorTuple.make_const(self.realize_cached_data())
 
@@ -216,13 +222,13 @@ class Tensor(Value):
 
     def __init__(
         self,
-        array,
+        array: ArrayLike | Tensor,
         *,  # device 及其后的参数必须用关键字传入。
         device: Optional[Device] = None,
-        dtype=None,
-        requires_grad=True,
-        **kwargs,
-    ):
+        dtype: DTypeLike = None,
+        requires_grad: bool = True,
+        **kwargs: Any,
+    ) -> None:
         if isinstance(array, Tensor):
             if device is None:
                 device = array.device
@@ -248,14 +254,16 @@ class Tensor(Value):
         )
 
     @staticmethod
-    def _array_from_numpy(numpy_array, device, dtype):
+    def _array_from_numpy(
+        numpy_array: ArrayLike, device: Device, dtype: DTypeLike
+    ) -> NDArray:
         """将 Python/NumPy 数据转换为当前后端使用的数组。"""
         if array_api is numpy:
             return numpy.array(numpy_array, dtype=dtype)
         return array_api.array(numpy_array, device=device, dtype=dtype)
 
     @staticmethod
-    def make_from_op(op: Op, inputs: List["Value"]):
+    def make_from_op(op: Op, inputs: Sequence[Value]) -> Tensor:
         """由算子和输入 Tensor 创建新的输出 Tensor 节点。
 
         该工厂方法由 ``TensorOp.__call__`` 调用。它使用 ``__new__``
@@ -276,7 +284,7 @@ class Tensor(Value):
         return tensor
 
     @staticmethod
-    def make_const(data, requires_grad=False):
+    def make_const(data: ArrayLike | Tensor, requires_grad: bool = False) -> Tensor:
         tensor = Tensor.__new__(Tensor)
         tensor._init(
             None,
@@ -289,12 +297,12 @@ class Tensor(Value):
         return tensor
 
     @property
-    def data(self):
+    def data(self) -> Tensor:
         # @property 让方法可以像普通属性一样通过 tensor.data 访问。
         return self.detach()
 
     @data.setter
-    def data(self, value):
+    def data(self, value: Tensor) -> None:
         # @data.setter 定义 tensor.data = value 时的行为。
         assert isinstance(value, Tensor)
         assert value.dtype == self.dtype, "%s %s" % (
@@ -303,28 +311,32 @@ class Tensor(Value):
         )
         self.cached_data = value.realize_cached_data()
 
-    def detach(self):
+    def detach(self) -> Tensor:
         """共享底层数据，但创建一个与原计算图断开的 Tensor。"""
         return Tensor.make_const(self.realize_cached_data())
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
         return self.realize_cached_data().shape
 
     @property
-    def dtype(self):
+    def dtype(self) -> numpy.dtype:
         return self.realize_cached_data().dtype
 
     @property
-    def device(self):
+    def device(self) -> CPUDevice:
         data = self.realize_cached_data()
         # NumPy 数组始终位于 CPU。
         if array_api is numpy:
             return cpu()
         return data.device
 
-    def backward(self, out_grad=None):
-        """以当前 Tensor 为最终输出，启动反向模式自动微分。"""
+    def backward(self, out_grad: Tensor | None = None) -> None:
+        """启动反向模式自动微分，将输出对各节点的梯度保存在节点的 grad 中。
+
+        默认梯度种子为全 1；非标量输出时相当于对输出元素之和求导。
+        此方法计算梯度，不更新模型参数。
+        """
         # 反向路径第 1 步：为最终输出准备梯度种子 dL/dL。
         # 未指定时使用全 1 Tensor；对标量损失而言，它就是数值 1。
         # *self.shape 会把形状元组解包为 init.ones 的位置参数。
@@ -336,19 +348,19 @@ class Tensor(Value):
         # 反向路径第 2 步：从当前输出出发，沿计算图向输入传播梯度。
         compute_gradient_of_variables(self, out_grad)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "needle.Tensor(" + str(self.realize_cached_data()) + ")"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.realize_cached_data().__str__()
 
-    def numpy(self):
+    def numpy(self) -> NDArray:
         data = self.realize_cached_data()
         if array_api is numpy:
             return numpy.array(data)
         return data.numpy()
 
-    def __add__(self, other):
+    def __add__(self, other: Tensor | float) -> Tensor:
         """重载 ``+``，并按右操作数类型选择对应的 Needle 算子。"""
         # 正向路径第 1 步：Python 把 a + b 转换为 a.__add__(b)。
         # 正向路径第 2 步：Tensor + Tensor 使用逐元素加法；Tensor + 标量
@@ -361,51 +373,51 @@ class Tensor(Value):
             # scalar 保存在 AddScalar 算子对象内部，因此它只有一个 Tensor 输入。
             return needle.ops.AddScalar(other)(self)
 
-    def __mul__(self, other):
+    def __mul__(self, other: Tensor | float) -> Tensor:
         if isinstance(other, Tensor):
             return needle.ops.EWiseMul()(self, other)
         else:
             return needle.ops.MulScalar(other)(self)
 
-    def __pow__(self, other):
+    def __pow__(self, other: Tensor | float) -> Tensor:
         if isinstance(other, Tensor):
             return needle.ops.EWisePow()(self, other)
         else:
             return needle.ops.PowerScalar(other)(self)
 
-    def __sub__(self, other):
+    def __sub__(self, other: Tensor | float) -> Tensor:
         if isinstance(other, Tensor):
             return needle.ops.EWiseAdd()(self, needle.ops.Negate()(other))
         else:
             return needle.ops.AddScalar(-other)(self)
 
-    def __truediv__(self, other):
+    def __truediv__(self, other: Tensor | float) -> Tensor:
         if isinstance(other, Tensor):
             return needle.ops.EWiseDiv()(self, other)
         else:
             return needle.ops.DivScalar(other)(self)
 
-    def __matmul__(self, other):
+    def __matmul__(self, other: Tensor) -> Tensor:
         # @ 在 Python 中对应矩阵乘法运算符。
         return needle.ops.MatMul()(self, other)
 
-    def matmul(self, other):
+    def matmul(self, other: Tensor) -> Tensor:
         return needle.ops.MatMul()(self, other)
 
-    def sum(self, axes=None):
+    def sum(self, axes: int | tuple[int, ...] | None = None) -> Tensor:
         return needle.ops.Summation(axes)(self)
 
-    def broadcast_to(self, shape):
+    def broadcast_to(self, shape: tuple[int, ...]) -> Tensor:
         return needle.ops.BroadcastTo(shape)(self)
 
-    def reshape(self, shape):
+    def reshape(self, shape: tuple[int, ...]) -> Tensor:
         return needle.ops.Reshape(shape)(self)
 
-    def __neg__(self):
+    def __neg__(self) -> Tensor:
         # 一元负号 -tensor 会调用 __neg__。
         return needle.ops.Negate()(self)
 
-    def transpose(self, axes=None):
+    def transpose(self, axes: tuple[int, int] | None = None) -> Tensor:
         return needle.ops.Transpose(axes)(self)
 
     # 反向运算符在左操作数无法处理时调用，例如 2 + tensor。
@@ -413,7 +425,7 @@ class Tensor(Value):
     __rmul__ = __mul__
 
 
-def compute_gradient_of_variables(output_tensor, out_grad):
+def compute_gradient_of_variables(output_tensor: Tensor, out_grad: Tensor) -> None:
     """从 output_tensor 开始执行反向模式自动微分。
 
     out_grad 是最终目标对 output_tensor 的梯度种子。函数不显式返回结果，
@@ -433,7 +445,7 @@ def compute_gradient_of_variables(output_tensor, out_grad):
     for node in reverse_topo_order:
         # 反向路径第 5 步：累计来自不同下游路径的梯度，得到完整的 dL/dnode，也就是gradient()用到的out_grad
         node.grad = sum_node_list(node_to_output_grads_list[node])
-        # 叶子节点仍需保存 grad，但没有生成它的算子，因此无需继续传播。
+
         if node.is_leaf():
             continue
         # 反向路径第 6 步：实际调用正向时保存在 node.op 中的局部求导规则(gradient())
@@ -464,7 +476,7 @@ def find_topo_sort(node_list: List[Value]) -> List[Value]:
     ### END YOUR SOLUTION
 
 
-def topo_sort_dfs(node, visited, topo_order):
+def topo_sort_dfs(node: Value, visited: set[Value], topo_order: list[Value]) -> None:
     """对计算图执行后序 DFS，并把节点追加到 topo_order。"""
     ### BEGIN YOUR SOLUTION
     if node in visited:
@@ -481,7 +493,7 @@ def topo_sort_dfs(node, visited, topo_order):
 # 辅助函数
 
 
-def sum_node_list(node_list):
+def sum_node_list(node_list: Sequence[Value]) -> Value:
     """累加多个梯度节点，同时避免 Python sum 从整数 0 开始产生冗余节点。"""
     from functools import reduce
     from operator import add
