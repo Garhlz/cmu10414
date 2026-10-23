@@ -3,6 +3,7 @@
 .vscode/
 .venv/
 .env
+runs/
 
 __pycache__/
 *.py[cod]
