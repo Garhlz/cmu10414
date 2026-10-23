@@ -1,5 +1,6 @@
 # 本机环境与编辑器设置
 .venv/
+.tools/
 .env
 .vscode/
 .idea/

@@ -1,9 +1,7 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 project(needle C CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-if(POLICY CMP0146)
-  cmake_policy(SET CMP0146 OLD)
-endif()
+option(NEEDLE_ENABLE_CUDA "Build the CUDA backend when a toolkit is available" ON)
 
 # 使用运行构建命令的虚拟环境，避免链接到系统中另一版本的 Python。
 set(Python_FIND_VIRTUALENV FIRST)
@@ -29,12 +27,14 @@ find_package(pybind11 CONFIG REQUIRED PATHS ${__pybind_path})
 
 
 if(NOT MSVC)
-  set(CMAKE_CXX_FLAGS "-std=c++11 -O2 -march=native ${CMAKE_CXX_FLAGS}")
-  set(CMAKE_CUDA_STANDARD 14)
+  set(CMAKE_CXX_FLAGS "-O2 -march=native ${CMAKE_CXX_FLAGS}")
 else()
-  set(CMAKE_CXX_FLAGS "/std:c++11 -O2 -march=native ${CMAKE_CXX_FLAGS}")
-  set(CMAKE_CUDA_STANDARD 14)
+  set(CMAKE_CXX_FLAGS "/O2 ${CMAKE_CXX_FLAGS}")
 endif()
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 include_directories(SYSTEM ${pybind11_INCLUDE_DIRS})
 list(APPEND LINKER_LIBS ${pybind11_LIBRARIES})
@@ -65,37 +65,39 @@ endif()
 ####################
 ### CUDA BACKEND ###
 ####################
-find_package(CUDA QUIET)
-if(CUDA_FOUND)
-  message(STATUS "Found cuda, building cuda backend")
-
-  include_directories(SYSTEM ${CUDA_INCLUDE_DIRS})
-  list(APPEND LINKER_LIBS ${CUDA_CUDART_LIBRARY})
-
-  # invoke nvidia smi to detect if we really have a GPU
-  execute_process(COMMAND "nvidia-smi" OUTPUT_QUIET ERROR_QUIET RESULT_VARIABLE NV_RET)
-  if(NV_RET EQUAL "0")
-    CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
-  else()
-    # no GPU visible: target the T4 (sm_75) that Colab GPU runtimes use;
-    # CUDA 12+ no longer supports the old K80 (sm_37) default
-    CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS 7.5)
+if(NEEDLE_ENABLE_CUDA)
+  # 项目本地安装优先；系统 Toolkit 也可通过 CUDAToolkit_ROOT 显式指定。
+  set(LOCAL_CUDA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.tools/cuda-13.0.2")
+  if(NOT CUDAToolkit_ROOT AND EXISTS "${LOCAL_CUDA_ROOT}/bin/nvcc")
+    set(CUDAToolkit_ROOT "${LOCAL_CUDA_ROOT}" CACHE PATH "CUDA Toolkit location")
   endif()
-
-  # set arch flags properly
-  CUDA_ADD_LIBRARY(ndarray_backend_cuda MODULE src/ndarray_backend_cuda.cu OPTIONS ${ARCH_FLAGS})
-
-  target_link_libraries(ndarray_backend_cuda ${LINKER_LIBS})
-  pybind11_extension(ndarray_backend_cuda)
-  pybind11_strip(ndarray_backend_cuda)
-
-  # directly output to ffi folder
-  set_target_properties(ndarray_backend_cuda
-    PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/needle/backend_ndarray
-    CXX_VISIBILITY_PRESET "hidden"
-    CUDA_VISIBILITY_PRESET "hidden"
-)
-else()
-  message(STATUS "CUDA not found, building the CPU backend only")
+  if(CUDAToolkit_ROOT AND NOT CMAKE_CUDA_COMPILER)
+    set(CMAKE_CUDA_COMPILER "${CUDAToolkit_ROOT}/bin/nvcc" CACHE FILEPATH "CUDA compiler" FORCE)
+  endif()
+  # 覆盖课程常见的 T4、Ampere 和本机 RTX 4060；允许命令行指定其他架构。
+  # 不依赖配置阶段访问 GPU，沙箱内也可以编译。
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 75 86 89)
+  endif()
+  include(CheckLanguage)
+  check_language(CUDA)
+  if(CMAKE_CUDA_COMPILER)
+    enable_language(CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    # clangd 读取编译数据库时需要直接看到头文件路径，而非 NVCC 专用响应文件。
+    set(CMAKE_CUDA_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
+    pybind11_add_module(ndarray_backend_cuda src/ndarray_backend_cuda.cu)
+    target_link_libraries(ndarray_backend_cuda PRIVATE CUDA::cudart)
+    get_target_property(CUDA_RUNTIME_LOCATION CUDA::cudart IMPORTED_LOCATION)
+    get_filename_component(CUDA_RUNTIME_DIR "${CUDA_RUNTIME_LOCATION}" DIRECTORY)
+    set_target_properties(ndarray_backend_cuda PROPERTIES
+      LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/needle/backend_ndarray
+      CXX_VISIBILITY_PRESET "hidden"
+      CUDA_VISIBILITY_PRESET "hidden"
+      BUILD_RPATH "${CUDA_RUNTIME_DIR}"
+    )
+    message(STATUS "CUDA backend enabled; architectures: ${CMAKE_CUDA_ARCHITECTURES}")
+  else()
+    message(STATUS "CUDA compiler not found; building the CPU backend only")
+  endif()
 endif()

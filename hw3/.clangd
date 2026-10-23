@@ -1,2 +1,10 @@
 CompileFlags:
   CompilationDatabase: build
+---
+If:
+  PathMatch: .*\.cu
+CompileFlags:
+  Compiler: clang++
+  Remove: [-forward-unknown-to-host-compiler, '--generate-code=*', '-Xcompiler=*', --options-file]
+  # 路径相对于编译数据库中的工作目录 build/；NVCC 构建不受此配置影响。
+  Add: [--cuda-path=../.tools/cuda-13.0.2, --cuda-gpu-arch=sm_89, --cuda-host-only, -Wno-unknown-cuda-version]
