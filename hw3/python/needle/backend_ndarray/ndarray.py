@@ -7,6 +7,7 @@ import numpy as np
 
 from . import ndarray_backend_numpy
 from . import ndarray_backend_cpu  # type: ignore[attr-defined]
+from builtins import sum as builtin_sum
 
 
 # Python 3.7 尚未提供 math.prod
@@ -28,7 +29,7 @@ class BackendDevice:
         return self.name + "()"
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self.mod, name)
+        return getattr(self.mod, name)  # 把调用转发给对应的后端模块
 
     def enabled(self) -> bool:
         return self.mod is not None
@@ -51,7 +52,9 @@ class BackendDevice:
         assert dtype == "float32"
         return NDArray.make(shape, device=self)
 
-    def full(self, shape: tuple[int, ...], fill_value: float, dtype: str = "float32") -> "NDArray":
+    def full(
+        self, shape: tuple[int, ...], fill_value: float, dtype: str = "float32"
+    ) -> "NDArray":
         dtype = "float32" if dtype is None else dtype
         assert dtype == "float32"
         arr = self.empty(shape, dtype)
@@ -131,9 +134,10 @@ class NDArray:
         """计算紧凑布局下各维度的步长。"""
         stride = 1
         res = []
-        for i in range(1, len(shape) + 1):
+        # 倒序遍历
+        for i in reversed(range(len(shape))):
             res.append(stride)
-            stride *= shape[-i]
+            stride *= shape[i]
         return tuple(res[::-1])
 
     @staticmethod
@@ -166,6 +170,10 @@ class NDArray:
     @property
     def strides(self) -> tuple[int, ...]:
         return self._strides
+
+    @property
+    def offset(self) -> int:
+        return self._offset
 
     @property
     def device(self) -> BackendDevice:
@@ -222,6 +230,7 @@ class NDArray:
             return self
         else:
             out = NDArray.make(self.shape, device=self.device)
+            # 按当前数组的逻辑顺序读取元素，复制到 out 的连续存储中
             self.device.compact(
                 self._handle, out._handle, self.shape, self.strides, self._offset
             )
@@ -231,7 +240,11 @@ class NDArray:
         """调整数组的形状和步长，不复制内存。"""
         assert len(shape) == len(strides)
         return NDArray.make(
-            shape, strides=strides, device=self.device, handle=self._handle, offset=self._offset
+            shape,
+            strides=strides,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
         )
 
     @property
@@ -240,11 +253,12 @@ class NDArray:
 
     def reshape(self, new_shape: tuple[int, ...]) -> "NDArray":
         """调整数组形状，不复制内存。
-
         返回的数组采用新形状，但与原数组指向同一块内存。
 
         异常：
             ValueError：新旧形状的元素总数不同，或原数组不是紧凑布局。
+            紧凑布局：按数组的逻辑顺序遍历时，元素恰好连续排列在底层存储中。
+            最后一个轴的stride 为 1，前一个轴的 stride 是后面各维度大小的乘积
 
         参数：
             new_shape (tuple)：数组的新形状。
@@ -253,7 +267,17 @@ class NDArray:
             NDArray：调整形状后与原数组共享内存的数组。"""
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        if self.size != prod(new_shape) or not self.is_compact():
+            raise ValueError
+        # 用新的shape算出新的stride
+        new_strides = self.compact_strides(new_shape)
+        return NDArray.make(
+            new_shape,
+            strides=new_strides,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION
 
     def permute(self, new_axes: tuple[int, ...]) -> "NDArray":
@@ -272,7 +296,17 @@ class NDArray:
             NDArray：维度置换后的新数组，与原数组共享内存，仅形状和步长改变。"""
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        # 新的第 i 个轴对应原来的 new_axes[i] 轴，形状和步长需一起重排。
+        new_shape = tuple(self.shape[axis] for axis in new_axes)
+        new_strides = tuple(self.strides[axis] for axis in new_axes)
+        # 复用底层存储和起始偏移，只创建新的数组视图。
+        return NDArray.make(
+            new_shape,
+            strides=new_strides,
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape: tuple[int, ...]) -> "NDArray":
@@ -292,13 +326,34 @@ class NDArray:
             NDArray：具有广播后形状的新数组，与原数组共享内存。"""
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        shape = self.shape
+        strides = list(self.strides)
+        assert len(new_shape) >= len(shape)
+
+        if len(new_shape) > len(shape):
+            diff = len(new_shape) - len(shape)
+            shape = (1,) * diff + shape  # 前面补充1
+            strides = [0] * diff + strides  # strides也需要补充维度
+
+        for i in range(len(new_shape)):
+            if shape[i] != new_shape[i]:
+                if shape[i] != 1:
+                    raise AssertionError
+                strides[i] = 0  # 这一维度上发生了广播，步长设为0
+        return NDArray.make(
+            new_shape,
+            strides=tuple(strides),
+            device=self.device,
+            handle=self._handle,
+            offset=self._offset,
+        )
         ### END YOUR SOLUTION
 
     ### 读取和设置元素
 
     def process_slice(self, sl: slice, dim: int) -> slice:
         """将切片转换为具有显式 start/stop/step 的形式。"""
+        # 主要就是把负数参数换成对应的正数
         start, stop, step = sl.start, sl.stop, sl.step
         if start is None:
             start = 0
@@ -313,12 +368,27 @@ class NDArray:
 
         # 不处理负步长等情况
         assert stop > start, "Start must be less than stop"
-        assert step > 0, "No support for  negative increments"
+        assert step > 0, "No support for negative increments"
         return slice(start, stop, step)
+
+    def to_slice(self, idxs: tuple[int | slice, ...]) -> tuple[slice, ...]:
+        res = []
+        for i, idx in enumerate(idxs):
+            if isinstance(idx, int):
+                if idx < 0:
+                    idx += self.shape[i]
+                res.append(slice(idx, idx + 1, 1))
+            elif isinstance(idx, slice):
+                idx = self.process_slice(idx, i)
+                res.append(idx)
+            else:
+                raise TypeError("index should be int or slice")
+        return tuple(res)
 
     def __getitem__(self, idxs: int | slice | tuple[int | slice, ...]) -> "NDArray":
         """通过 Python 的 __getitem__ 操作访问数组元素。
 
+        多维数组用tuple[int | slice, ...]
         对于 a[1:5, :-1:2, 4, :] 这样的表达式，Python 会将索引转换为由
         切片和整数（例如这里的 4）组成的元组。切片的 start、stop、step
         可能为 None 或负数。为简化实现，已提供代码将这些索引规范化为
@@ -341,23 +411,36 @@ class NDArray:
         # 将单个索引包装为元组，并把所有索引转换为切片
         if not isinstance(idxs, tuple):
             idxs = (idxs,)
-        idxs = tuple(
-            s + self.shape[i] if isinstance(s, int) and s < 0 else s
-            for i, s in enumerate(idxs)
-        )
-        slices = tuple(
-            [
-                self.process_slice(s, i) if isinstance(s, slice) else slice(s, s + 1, 1)
-                for i, s in enumerate(idxs)
-            ]
-        )
+
+        slices = self.to_slice(idxs)
+
         assert len(slices) == self.ndim, "Need indexes equal to number of dimensions"
 
         ### BEGIN YOUR SOLUTION
-        raise NotImplementedError()
+        new_shape = tuple(len(range(s.start, s.stop, s.step)) for s in slices)
+
+        new_strides = tuple(
+            old_stride * s.step for old_stride, s in zip(self.strides, slices)
+        )
+
+        new_offset = self.offset + builtin_sum(
+            old_stride * s.start for old_stride, s in zip(self.strides, slices)
+        )
+
+        return NDArray.make(
+            new_shape,
+            strides=new_strides,
+            offset=new_offset,
+            device=self.device,
+            handle=self._handle,
+        )
         ### END YOUR SOLUTION
 
-    def __setitem__(self, idxs: int | slice | tuple[int | slice, ...], other: Union["NDArray", float]) -> None:
+    def __setitem__(
+        self,
+        idxs: int | slice | tuple[int | slice, ...],
+        other: Union["NDArray", float],
+    ) -> None:
         """设置数组视图中的值，索引语义与 __getitem__() 相同。"""
         view = self.__getitem__(idxs)
         if isinstance(other, NDArray):
@@ -520,14 +603,16 @@ class NDArray:
             return out
 
     ### 归约：对所有元素或沿指定轴求和、求最大值
-    def reduce_view_out(self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False) -> tuple["NDArray", "NDArray"]:
+    def reduce_view_out(
+        self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False
+    ) -> tuple["NDArray", "NDArray"]:
         """返回适用于归约操作的输入视图，以及用于保存结果的输出数组。"""
         if isinstance(axis, tuple) and not axis:
             raise ValueError("Empty axis in reduce")
 
         if axis is None:
             view = self.compact().reshape((1,) * (self.ndim - 1) + (prod(self.shape),))
-            #out = NDArray.make((1,) * self.ndim, device=self.device)
+            # out = NDArray.make((1,) * self.ndim, device=self.device)
             out = NDArray.make((1,), device=self.device)
 
         else:
@@ -540,37 +625,53 @@ class NDArray:
             )
             out = NDArray.make(
                 tuple([1 if i == axis else s for i, s in enumerate(self.shape)])
-                if keepdims else
-                tuple([s for i, s in enumerate(self.shape) if i != axis]),
+                if keepdims
+                else tuple([s for i, s in enumerate(self.shape) if i != axis]),
                 device=self.device,
             )
         return view, out
 
-    def sum(self, axis: int | tuple[int, ...] | list[int] | None = None, keepdims: bool = False) -> "NDArray":
+    def sum(
+        self,
+        axis: int | tuple[int, ...] | list[int] | None = None,
+        keepdims: bool = False,
+    ) -> "NDArray":
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_sum(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
-    def max(self, axis: int | tuple[int, ...] | list[int] | None = None, keepdims: bool = False) -> "NDArray":
+    def max(
+        self,
+        axis: int | tuple[int, ...] | list[int] | None = None,
+        keepdims: bool = False,
+    ) -> "NDArray":
         view, out = self.reduce_view_out(axis, keepdims=keepdims)
         self.device.reduce_max(view.compact()._handle, out._handle, view.shape[-1])
         return out
 
 
-
-def array(a: Any, dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+def array(
+    a: Any, dtype: str = "float32", device: BackendDevice | None = None
+) -> NDArray:
     """提供与 NumPy 接口更接近的便捷方法。"""
     dtype = "float32" if dtype is None else dtype
     assert dtype == "float32"
     return NDArray(a, device=device)
 
 
-def empty(shape: tuple[int, ...], dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+def empty(
+    shape: tuple[int, ...], dtype: str = "float32", device: BackendDevice | None = None
+) -> NDArray:
     device = device if device is not None else default_device()
     return device.empty(shape, dtype)
 
 
-def full(shape: tuple[int, ...], fill_value: float, dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
+def full(
+    shape: tuple[int, ...],
+    fill_value: float,
+    dtype: str = "float32",
+    device: BackendDevice | None = None,
+) -> NDArray:
     device = device if device is not None else default_device()
     return device.full(shape, fill_value, dtype)
 
@@ -599,5 +700,7 @@ def tanh(a: NDArray) -> NDArray:
     return a.tanh()
 
 
-def sum(a: NDArray, axis: int | tuple[int] | list[int] | None = None, keepdims: bool = False) -> NDArray:
+def sum(
+    a: NDArray, axis: int | tuple[int] | list[int] | None = None, keepdims: bool = False
+) -> NDArray:
     return a.sum(axis=axis, keepdims=keepdims)
