@@ -24,10 +24,35 @@ COMPONENTS = (
 )
 
 
+def patch_glibc_compatibility() -> None:
+    """CUDA 13.0 的 rsqrt 声明需要与 glibc 2.41+ 的 noexcept 保持一致。
+
+    仅修改项目本地头文件，条件宏保留旧 glibc / 其他平台的原始声明。
+    https://forums.developer.nvidia.com/t/362940
+    """
+    header = DEST / "include" / "crt" / "math_functions.h"
+    content = header.read_text()
+    for signature in ("rsqrt(double x)", "rsqrtf(float x)"):
+        old = next(
+            (line for line in content.splitlines()
+             if line.startswith("extern ") and line.endswith(signature + ";")),
+            None,
+        )
+        marker = "// CMU10414 glibc compatibility: " + signature
+        if old is not None and marker not in content:
+            new = (marker + "\n#if defined(__GLIBC__)\n"
+                   "#if __GLIBC_PREREQ(2, 41)\n"
+                   + old[:-1] + " noexcept(true);\n#else\n" + old
+                   + "\n#endif\n#else\n" + old + "\n#endif")
+            content = content.replace(old, new, 1)
+    header.write_text(content)
+
+
 def main() -> None:
     marker = DEST / "installed-components.json"
     records = json.loads(marker.read_text()) if marker.exists() else {}
     if all(component in records for component in COMPONENTS):
+        patch_glibc_compatibility()
         if (DEST / "lib").is_dir() and not (DEST / "lib64").exists():
             (DEST / "lib64").symlink_to("lib", target_is_directory=True)
         subprocess.run([str(DEST / "bin" / "nvcc"), "--version"], check=True)
@@ -85,6 +110,7 @@ def main() -> None:
     if (DEST / "lib").is_dir() and not (DEST / "lib64").exists():
         (DEST / "lib64").symlink_to("lib", target_is_directory=True)
     marker.write_text(json.dumps(records, indent=2) + "\n")
+    patch_glibc_compatibility()
     subprocess.run([str(DEST / "bin" / "nvcc"), "--version"], check=True)
     print(f"安装完成：{DEST}\n接下来运行 uv run make", flush=True)
 

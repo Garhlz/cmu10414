@@ -1,0 +1,41 @@
+{
+  "folders": [
+    {
+      "path": "hw0"
+    },
+    {
+      "path": "hw1"
+    },
+    {
+      "path": "hw2"
+    },
+    {
+      "path": "hw3"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.ruff_cache": true
+    },
+    "python.terminal.activateEnvironment": true,
+    "terminal.integrated.profiles.linux": {
+      "Nushell": {
+        "path": "/usr/bin/nu"
+      }
+    },
+    "terminal.integrated.defaultProfile.linux": "Nushell"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.vscode-pylance",
+      "ms-python.debugpy",
+      "ms-toolsai.jupyter",
+      "llvm-vs-code-extensions.vscode-clangd",
+      "charliermarsh.ruff",
+      "ms-vscode.cmake-tools"
+    ]
+  }
+}

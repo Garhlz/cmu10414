@@ -1,0 +1,13 @@
+# 本机环境、工具下载与编辑器配置
+.venv/
+.tools/
+.env
+.vscode/
+
+# Python 缓存与本机编译产物
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+build/
+*.so
+compile_commands.json

@@ -53,9 +53,11 @@ uv run pytest -q
 
 ## CUDA
 
+Ubuntu 26.04 的 glibc 2.43 与 CUDA 13.0 原始头文件的 `rsqrt`/`rsqrtf` 异常声明不一致。安装脚本会在项目本地 `crt/math_functions.h` 中加入仅对 glibc 2.41+ 生效的 `noexcept(true)` 条件兼容修复，不修改系统头文件。问题参考 [NVIDIA 论坛](https://forums.developer.nvidia.com/t/362940)。
+
 CMake 在找到 CUDA Toolkit 时会尝试构建 GPU 后端；需要 NVIDIA GPU、可用驱动和 Toolkit 提供的 `nvcc` 编译器。仅安装支持 GPU 的 Python 包不能替代 CUDA 编译工具链。
 
-本机 WSL 已确认可以访问 RTX 4060。项目本地 Toolkit 为 CUDA 13.0.2，支持当前 Fedora 42/GCC 15 环境，安装在被忽略的 `.tools/cuda-13.0.2/`。使用 NVIDIA 官方组件清单中的 SHA-256 校验下载，不修改 Windows/WSL 驱动或系统 Python。
+本机 WSL 已确认可以访问 RTX 4060。项目本地 Toolkit 为 CUDA 13.0.2，用于当前 Ubuntu 26.04/GCC 15 WSL 环境，安装在被忽略的 `.tools/cuda-13.0.2/`。使用 NVIDIA 官方组件清单中的 SHA-256 校验下载，不修改 Windows/WSL 驱动或系统 Python。
 
 新环境可以执行：
 
@@ -68,7 +70,7 @@ uv run python scripts/check_cuda.py
 
 `setup_cuda.py` 下载编译器、运行时、编译头文件、NVVM 以及编辑器兼容头依赖的 cuRAND，约 152 MiB 压缩包；已安装时重复运行不会重新下载。版本来自 [NVIDIA CUDA 13.0.2 分发清单](https://developer.download.nvidia.com/compute/cuda/redist/redistrib_13.0.2.json)。
 
-`setup_clangd.py` 从 LLVM clangd 官方发布下载 23.1.0 并校验 SHA-256，约 112 MiB 压缩包。系统 clangd 20 对 CUDA 13 的兼容性不足，本机 VS Code 已将 `clangd.path` 指向 `.tools/clangd_23.1.0/bin/clangd`；重新打开工作区或执行 `clangd: Restart language server` 后生效。
+`setup_clangd.py` 从 LLVM clangd 官方发布下载 23.1.0 并校验 SHA-256，约 112 MiB 压缩包。旧版 clangd 对 CUDA 13 的兼容性不足，本机 VS Code 已将 `clangd.path` 指向 `.tools/clangd_23.1.0/bin/clangd`；重新打开工作区或执行 `clangd: Restart language server` 后生效。
 
 `check_cuda.py` 验证扩展导入、显存分配、数据传输和骨架已有的 Fill kernel，不调用尚待实现的计算算子。本机 RTX 4060 已通过这些检查，CUDA 源码的 clangd 解析检查为 0 个错误。
 
