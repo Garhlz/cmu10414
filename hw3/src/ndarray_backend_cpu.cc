@@ -16,9 +16,8 @@ const size_t ELEM_SIZE = sizeof(scalar_t);
 
 
 /**
- * This is a utility structure for maintaining an array aligned to ALIGNMENT boundaries in
- * memory.  This alignment should be at least TILE * ELEM_SIZE, though we make it even larger
- * here by default.
+ * 用于管理按 ALIGNMENT 字节边界对齐的数组的辅助结构体。
+ * 对齐大小至少应为 TILE * ELEM_SIZE；此处默认采用更大的值。
  */
 struct AlignedArray {
   AlignedArray(const size_t size) {
@@ -36,7 +35,7 @@ struct AlignedArray {
 
 void Fill(AlignedArray* out, scalar_t val) {
   /**
-   * Fill the values of an aligned array with val
+   * 将对齐数组中的所有元素填充为 val。
    */
   for (int i = 0; i < out->size; i++) {
     out->ptr[i] = val;
@@ -48,18 +47,17 @@ void Fill(AlignedArray* out, scalar_t val) {
 void Compact(const AlignedArray& a, AlignedArray* out, std::vector<int32_t> shape,
              std::vector<int32_t> strides, size_t offset) {
   /**
-   * Compact an array in memory
+   * 将数组整理为内存中的紧凑布局。
    *
-   * Args:
-   *   a: non-compact representation of the array, given as input
-   *   out: compact version of the array to be written
-   *   shape: shapes of each dimension for a and out
-   *   strides: strides of the *a* array (not out, which has compact strides)
-   *   offset: offset of the *a* array (not out, which has zero offset, being compact)
+   * 参数：
+   *   a：输入的非紧凑数组。
+   *   out：用于写入结果的紧凑数组。
+   *   shape：a 和 out 各维度的大小。
+   *   strides：a 的步长；out 使用紧凑步长。
+   *   offset：a 的偏移量；紧凑数组 out 的偏移量为 0。
    *
-   * Returns:
-   *  void (you need to modify out directly, rather than returning anything; this is true for all the
-   *  function will implement here, so we won't repeat this note.)
+   * 返回：
+   *   void：直接修改 out，不返回结果。本文件中其余待实现函数也遵循此约定。
    */
   /// BEGIN SOLUTION
   assert(false && "Not Implemented");
@@ -69,14 +67,14 @@ void Compact(const AlignedArray& a, AlignedArray* out, std::vector<int32_t> shap
 void EwiseSetitem(const AlignedArray& a, AlignedArray* out, std::vector<int32_t> shape,
                   std::vector<int32_t> strides, size_t offset) {
   /**
-   * Set items in a (non-compact) array
+   * 设置非紧凑数组中的元素。
    *
-   * Args:
-   *   a: _compact_ array whose items will be written to out
-   *   out: non-compact array whose items are to be written
-   *   shape: shapes of each dimension for a and out
-   *   strides: strides of the *out* array (not a, which has compact strides)
-   *   offset: offset of the *out* array (not a, which has zero offset, being compact)
+   * 参数：
+   *   a：紧凑的输入数组，其元素将写入 out。
+   *   out：待写入的非紧凑数组。
+   *   shape：a 和 out 各维度的大小。
+   *   strides：out 的步长；a 使用紧凑步长。
+   *   offset：out 的偏移量；紧凑数组 a 的偏移量为 0。
    */
   /// BEGIN SOLUTION
   assert(false && "Not Implemented");
@@ -86,17 +84,16 @@ void EwiseSetitem(const AlignedArray& a, AlignedArray* out, std::vector<int32_t>
 void ScalarSetitem(const size_t size, scalar_t val, AlignedArray* out, std::vector<int32_t> shape,
                    std::vector<int32_t> strides, size_t offset) {
   /**
-   * Set items is a (non-compact) array
+   * 将标量写入非紧凑数组中的元素。
    *
-   * Args:
-   *   size: number of elements to write in out array (note that this will note be the same as
-   *         out.size, because out is a non-compact subset array);  it _will_ be the same as the
-   *         product of items in shape, but convenient to just pass it here.
-   *   val: scalar value to write to
-   *   out: non-compact array whose items are to be written
-   *   shape: shapes of each dimension of out
-   *   strides: strides of the out array
-   *   offset: offset of the out array
+   * 参数：
+   *   size：要写入 out 的元素数量。out 是非紧凑子数组，因此该值不一定
+   *         等于 out.size，而是等于 shape 各项的乘积；单独传入此值便于使用。
+   *   val：要写入的标量值。
+   *   out：待写入的非紧凑数组。
+   *   shape：out 各维度的大小。
+   *   strides：out 的步长。
+   *   offset：out 的偏移量。
    */
 
   /// BEGIN SOLUTION
@@ -106,7 +103,7 @@ void ScalarSetitem(const size_t size, scalar_t val, AlignedArray* out, std::vect
 
 void EwiseAdd(const AlignedArray& a, const AlignedArray& b, AlignedArray* out) {
   /**
-   * Set entries in out to be the sum of correspondings entires in a and b.
+   * 将 a 和 b 的对应元素相加，并将结果写入 out。
    */
   for (size_t i = 0; i < a.size; i++) {
     out->ptr[i] = a.ptr[i] + b.ptr[i];
@@ -115,7 +112,7 @@ void EwiseAdd(const AlignedArray& a, const AlignedArray& b, AlignedArray* out) {
 
 void ScalarAdd(const AlignedArray& a, scalar_t val, AlignedArray* out) {
   /**
-   * Set entries in out to be the sum of corresponding entry in a plus the scalar val.
+   * 将 a 的各元素加上标量 val，并将结果写入 out。
    */
   for (size_t i = 0; i < a.size; i++) {
     out->ptr[i] = a.ptr[i] + val;
@@ -124,9 +121,8 @@ void ScalarAdd(const AlignedArray& a, scalar_t val, AlignedArray* out) {
 
 
 /**
- * In the code the follows, use the above template to create analogous element-wise
- * and and scalar operators for the following functions.  See the numpy backend for
- * examples of how they should work.
+ * 参考上面的实现，为以下函数编写对应的逐元素和标量操作。
+ * 可参考 NumPy 后端了解各操作的预期行为。
  *   - EwiseMul, ScalarMul
  *   - EwiseDiv, ScalarDiv
  *   - ScalarPower
@@ -137,26 +133,24 @@ void ScalarAdd(const AlignedArray& a, scalar_t val, AlignedArray* out) {
  *   - EwiseExp
  *   - EwiseTanh
  *
- * If you implement all these naively, there will be a lot of repeated code, so
- * you are welcome (but not required), to use macros or templates to define these
- * functions (however you want to do so, as long as the functions match the proper)
- * signatures above.
+ * 分别朴素实现会产生大量重复代码。可以使用宏或模板精简实现，
+ * 但这不是必需的；无论采用何种方式，函数签名都必须符合上述要求。
  */
 
 
 void Matmul(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, uint32_t m, uint32_t n,
             uint32_t p) {
   /**
-   * Multiply two (compact) matrices into an output (also compact) matrix.  For this implementation
-   * you can use the "naive" three-loop algorithm.
+   * 将两个紧凑矩阵相乘，结果写入同样紧凑的输出矩阵。
+   * 本函数可使用朴素的三重循环算法。
    *
-   * Args:
-   *   a: compact 2D array of size m x n
-   *   b: compact 2D array of size n x p
-   *   out: compact 2D array of size m x p to write the output to
-   *   m: rows of a / out
-   *   n: columns of a / rows of b
-   *   p: columns of b / out
+   * 参数：
+   *   a：大小为 m × n 的紧凑二维数组。
+   *   b：大小为 n × p 的紧凑二维数组。
+   *   out：大小为 m × p 的紧凑二维输出数组。
+   *   m：a 和 out 的行数。
+   *   n：a 的列数，也是 b 的行数。
+   *   p：b 和 out 的列数。
    */
 
   /// BEGIN SOLUTION
@@ -169,20 +163,19 @@ inline void AlignedDot(const float* __restrict__ a,
                        float* __restrict__ out) {
 
   /**
-   * Multiply together two TILE x TILE matrices, and _add _the result to out (it is important to add
-   * the result to the existing out, which you should not set to zero beforehand).  We are including
-   * the compiler flags here that enable the compile to properly use vector operators to implement
-   * this function.  Specifically, the __restrict__ keyword indicates to the compile that a, b, and
-   * out don't have any overlapping memory (which is necessary in order for vector operations to be
-   * equivalent to their non-vectorized counterparts (imagine what could happen otherwise if a, b,
-   * and out had overlapping memory).  Similarly the __builtin_assume_aligned keyword tells the
-   * compiler that the input array will be aligned to the appropriate blocks in memory, which also
-   * helps the compiler vectorize the code.
+   * 将两个 TILE × TILE 矩阵相乘，并将结果累加到 out。
+   * 必须累加到已有的 out 上，不能在此函数中预先将 out 清零。
+   * 这里提供了帮助编译器使用向量运算的标记。
+   * __restrict__ 告诉编译器 a、b 和 out 的内存互不重叠；
+   * 这是向量化运算与非向量化运算结果一致的必要条件，
+   * 可以思考当三者内存重叠时会发生什么。
+   * __builtin_assume_aligned 则告诉编译器输入数组满足指定的内存对齐要求，
+   * 同样有助于向量化。
    *
-   * Args:
-   *   a: compact 2D array of size TILE x TILE
-   *   b: compact 2D array of size TILE x TILE
-   *   out: compact 2D array of size TILE x TILE to write to
+   * 参数：
+   *   a：大小为 TILE × TILE 的紧凑二维数组。
+   *   b：大小为 TILE × TILE 的紧凑二维数组。
+   *   out：用于累加结果的 TILE × TILE 紧凑二维数组。
    */
 
   a = (const float*)__builtin_assume_aligned(a, TILE * ELEM_SIZE);
@@ -197,23 +190,20 @@ inline void AlignedDot(const float* __restrict__ a,
 void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out, uint32_t m,
                  uint32_t n, uint32_t p) {
   /**
-   * Matrix multiplication on tiled representations of array.  In this setting, a, b, and out
-   * are all *4D* compact arrays of the appropriate size, e.g. a is an array of size
+   * 对分块表示的数组执行矩阵乘法。
+   * a、b 和 out 都是适当大小的紧凑四维数组，例如 a 的布局为：
    *   a[m/TILE][n/TILE][TILE][TILE]
-   * You should do the multiplication tile-by-tile to improve performance of the array (i.e., this
-   * function should call `AlignedDot()` implemented above).
+   * 应逐块进行乘法以提高性能，即调用上面实现的 AlignedDot()。
    *
-   * Note that this function will only be called when m, n, p are all multiples of TILE, so you can
-   * assume that this division happens without any remainder.
+   * 仅当 m、n、p 都是 TILE 的倍数时才会调用本函数，因此整除不会有余数。
    *
-   * Args:
-   *   a: compact 4D array of size m/TILE x n/TILE x TILE x TILE
-   *   b: compact 4D array of size n/TILE x p/TILE x TILE x TILE
-   *   out: compact 4D array of size m/TILE x p/TILE x TILE x TILE to write to
-   *   m: rows of a / out
-   *   n: columns of a / rows of b
-   *   p: columns of b / out
-   *
+   * 参数：
+   *   a：大小为 m/TILE × n/TILE × TILE × TILE 的紧凑四维数组。
+   *   b：大小为 n/TILE × p/TILE × TILE × TILE 的紧凑四维数组。
+   *   out：大小为 m/TILE × p/TILE × TILE × TILE 的紧凑四维输出数组。
+   *   m：a 和 out 的行数。
+   *   n：a 的列数，也是 b 的行数。
+   *   p：b 和 out 的列数。
    */
   /// BEGIN SOLUTION
   assert(false && "Not Implemented");
@@ -222,12 +212,12 @@ void MatmulTiled(const AlignedArray& a, const AlignedArray& b, AlignedArray* out
 
 void ReduceMax(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
   /**
-   * Reduce by taking maximum over `reduce_size` contiguous blocks.
+   * 对每组 reduce_size 个连续元素取最大值。
    *
-   * Args:
-   *   a: compact array of size a.size = out.size * reduce_size to reduce over
-   *   out: compact array to write into
-   *   reduce_size: size of the dimension to reduce over
+   * 参数：
+   *   a：待归约的紧凑数组，a.size = out.size * reduce_size。
+   *   out：用于写入结果的紧凑数组。
+   *   reduce_size：待归约维度的大小。
    */
 
   /// BEGIN SOLUTION
@@ -237,12 +227,12 @@ void ReduceMax(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
 
 void ReduceSum(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
   /**
-   * Reduce by taking sum over `reduce_size` contiguous blocks.
+   * 对每组 reduce_size 个连续元素求和。
    *
-   * Args:
-   *   a: compact array of size a.size = out.size * reduce_size to reduce over
-   *   out: compact array to write into
-   *   reduce_size: size of the dimension to reduce over
+   * 参数：
+   *   a：待归约的紧凑数组，a.size = out.size * reduce_size。
+   *   out：用于写入结果的紧凑数组。
+   *   reduce_size：待归约维度的大小。
    */
 
   /// BEGIN SOLUTION
@@ -250,8 +240,8 @@ void ReduceSum(const AlignedArray& a, AlignedArray* out, size_t reduce_size) {
   /// END SOLUTION
 }
 
-}  // namespace cpu
-}  // namespace needle
+}  // 命名空间 cpu
+}  // 命名空间 needle
 
 PYBIND11_MODULE(ndarray_backend_cpu, m) {
   namespace py = pybind11;
@@ -266,8 +256,8 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
       .def("ptr", &AlignedArray::ptr_as_int)
       .def_readonly("size", &AlignedArray::size);
 
-  // return numpy array (with copying for simplicity, otherwise garbage
-  // collection is a pain)
+  // 返回 NumPy 数组；为简化内存生命周期管理而采用复制方式，
+  // 否则垃圾回收处理会比较麻烦。
   m.def("to_numpy", [](const AlignedArray& a, std::vector<size_t> shape,
                        std::vector<size_t> strides, size_t offset) {
     std::vector<size_t> numpy_strides = strides;
@@ -276,7 +266,7 @@ PYBIND11_MODULE(ndarray_backend_cpu, m) {
     return py::array_t<scalar_t>(shape, numpy_strides, a.ptr + offset);
   });
 
-  // convert from numpy (with copying)
+  // 从 NumPy 数组复制数据
   m.def("from_numpy", [](py::array_t<scalar_t> a, AlignedArray* out) {
     std::memcpy(out->ptr, a.request().ptr, out->size * ELEM_SIZE);
   });

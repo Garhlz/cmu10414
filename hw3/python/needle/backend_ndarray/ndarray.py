@@ -9,13 +9,13 @@ from . import ndarray_backend_numpy
 from . import ndarray_backend_cpu  # type: ignore[attr-defined]
 
 
-# math.prod not in Python 3.7
+# Python 3.7 尚未提供 math.prod
 def prod(x: Iterable[int]) -> int:
     return reduce(operator.mul, x, 1)
 
 
 class BackendDevice:
-    """A backend device, wrapps the implementation module."""
+    """后端设备：封装具体的后端实现模块。"""
 
     def __init__(self, name: str, mod: Any) -> None:
         self.name: str = name
@@ -34,13 +34,13 @@ class BackendDevice:
         return self.mod is not None
 
     def randn(self, *shape: int, dtype: str = "float32") -> "NDArray":
-        # note: numpy doesn't support types within standard random routines, and
-        # .astype("float32") does work if we're generating a singleton
+        # 注意：NumPy 的标准随机函数不支持指定数据类型，
+        # 生成单个元素时也可使用 .astype("float32") 转换类型。
         return NDArray(np.random.randn(*shape).astype(dtype), device=self)
 
     def rand(self, *shape: int, dtype: str = "float32") -> "NDArray":
-        # note: numpy doesn't support types within standard random routines, and
-        # .astype("float32") does work if we're generating a singleton
+        # 注意：NumPy 的标准随机函数不支持指定数据类型，
+        # 生成单个元素时也可使用 .astype("float32") 转换类型。
         return NDArray(np.random.rand(*shape).astype(dtype), device=self)
 
     def one_hot(self, n: int, i: int, dtype: str = "float32") -> "NDArray":
@@ -60,7 +60,7 @@ class BackendDevice:
 
 
 def cuda() -> BackendDevice:
-    """Return cuda device"""
+    """返回 CUDA 设备。"""
     try:
         from . import ndarray_backend_cuda  # type: ignore[attr-defined]
 
@@ -70,12 +70,12 @@ def cuda() -> BackendDevice:
 
 
 def cpu_numpy() -> BackendDevice:
-    """Return numpy device"""
+    """返回 NumPy 设备。"""
     return BackendDevice("cpu_numpy", ndarray_backend_numpy)
 
 
 def cpu() -> BackendDevice:
-    """Return cpu device"""
+    """返回 CPU 设备。"""
     return BackendDevice("cpu", ndarray_backend_cpu)
 
 
@@ -84,21 +84,16 @@ def default_device() -> BackendDevice:
 
 
 def all_devices() -> list[BackendDevice]:
-    """return a list of all available devices"""
+    """返回所有后端设备的列表。"""
     return [cpu(), cuda(), cpu_numpy()]
 
 
 class NDArray:
-    """A generic ND array class that may contain multipe different backends
-    i.e., a Numpy backend, a native CPU backend, or a GPU backend.
+    """支持多种后端的通用 n 维数组类。
 
-    This class will only contains those functions that you need to implement
-    to actually get the desired functionality for the programming examples
-    in the homework, and no more.
-
-    For now, for simplicity the class only supports float32 types, though
-    this can be extended if desired.
-    """
+    后端包括 NumPy、原生 CPU 和 GPU。
+    本类只提供完成作业编程示例所需的功能。
+    为简化实现，目前只支持 float32；如有需要可以扩展。"""
 
     _shape: tuple[int, ...]
     _strides: tuple[int, ...]
@@ -107,20 +102,20 @@ class NDArray:
     _handle: Any
 
     def __init__(self, other, device=None):
-        """Create by copying another NDArray, or from numpy"""
+        """复制另一个 NDArray，或从 NumPy 数组创建。"""
         if isinstance(other, NDArray):
-            # create a copy of existing NDArray
+            # 复制已有的 NDArray
             if device is None:
                 device = other.device
-            self._init(other.to(device) + 0.0)  # this creates a copy
+            self._init(other.to(device) + 0.0)  # 这里会创建副本
         elif isinstance(other, np.ndarray):
-            # create copy from numpy array
+            # 从 NumPy 数组创建副本
             device = device if device is not None else default_device()
             array = self.make(other.shape, device=device)
             array.device.from_numpy(np.ascontiguousarray(other), array._handle)
             self._init(array)
         else:
-            # see if we can create a numpy array from input
+            # 尝试先将输入转换成 NumPy 数组
             array = NDArray(np.array(other), device=device)
             self._init(array)
 
@@ -133,7 +128,7 @@ class NDArray:
 
     @staticmethod
     def compact_strides(shape: tuple[int, ...]) -> tuple[int, ...]:
-        """Utility function to compute compact strides"""
+        """计算紧凑布局下各维度的步长。"""
         stride = 1
         res = []
         for i in range(1, len(shape) + 1):
@@ -149,9 +144,9 @@ class NDArray:
         handle: Any = None,
         offset: int = 0,
     ) -> "NDArray":
-        """Create a new NDArray with the given properties.  This will allocation the
-        memory if handle=None, otherwise it will use the handle of an existing
-        array."""
+        """根据给定属性创建新的 NDArray。
+
+        handle=None 时分配内存，否则复用已有数组的 handle。"""
         array = NDArray.__new__(NDArray)
         array._shape = tuple(shape)
         array._strides = NDArray.compact_strides(shape) if strides is None else strides
@@ -163,7 +158,7 @@ class NDArray:
             array._handle = handle
         return array
 
-    ### Properies and string representations
+    ### 属性和字符串表示
     @property
     def shape(self) -> tuple[int, ...]:
         return self._shape
@@ -178,12 +173,12 @@ class NDArray:
 
     @property
     def dtype(self) -> str:
-        # only support float32 for now
+        # 目前只支持 float32
         return "float32"
 
     @property
     def ndim(self) -> int:
-        """Return number of dimensions."""
+        """返回数组的维度数。"""
         return len(self._shape)
 
     @property
@@ -196,34 +191,33 @@ class NDArray:
     def __str__(self) -> str:
         return self.numpy().__str__()
 
-    ### Basic array manipulation
+    ### 基本数组操作
     def fill(self, value: float) -> None:
-        """Fill (in place) with a constant value."""
+        """用常量值原地填充数组。"""
         self._device.fill(self._handle, value)
 
     def to(self, device: BackendDevice) -> "NDArray":
-        """Convert between devices, using to/from numpy calls as the unifying bridge."""
+        """通过转换为 NumPy 数组再从 NumPy 导入，在不同设备间转换。"""
         if device == self.device:
             return self
         else:
             return NDArray(self.numpy(), device=device)
 
     def numpy(self) -> np.ndarray:
-        """convert to a numpy array"""
+        """转换为 NumPy 数组。"""
         return self.device.to_numpy(
             self._handle, self.shape, self.strides, self._offset
         )
 
     def is_compact(self) -> bool:
-        """Return true if array is compact in memory and internal size equals product
-        of the shape dimensions"""
+        """判断数组是否在内存中紧凑排列，且底层存储大小等于各维度大小的乘积。"""
         return (
             self._strides == self.compact_strides(self._shape)
             and prod(self.shape) == self._handle.size
         )
 
     def compact(self) -> "NDArray":
-        """Convert a matrix to be compact"""
+        """将数组转换为紧凑布局。"""
         if self.is_compact():
             return self
         else:
@@ -234,7 +228,7 @@ class NDArray:
             return out
 
     def as_strided(self, shape: tuple[int, ...], strides: tuple[int, ...]) -> "NDArray":
-        """Restride the matrix without copying memory."""
+        """调整数组的形状和步长，不复制内存。"""
         assert len(shape) == len(strides)
         return NDArray.make(
             shape, strides=strides, device=self.device, handle=self._handle, offset=self._offset
@@ -245,79 +239,66 @@ class NDArray:
         return self.reshape((self.size,))
 
     def reshape(self, new_shape: tuple[int, ...]) -> "NDArray":
-        """
-        Reshape the matrix without copying memory.  This will return a matrix
-        that corresponds to a reshaped array but points to the same memory as
-        the original array.
+        """调整数组形状，不复制内存。
 
-        Raises:
-            ValueError if product of current shape is not equal to the product
-            of the new shape, or if the matrix is not compact.
+        返回的数组采用新形状，但与原数组指向同一块内存。
 
-        Args:
-            new_shape (tuple): new shape of the array
+        异常：
+            ValueError：新旧形状的元素总数不同，或原数组不是紧凑布局。
 
-        Returns:
-            NDArray : reshaped array; this will point to the
-        """
+        参数：
+            new_shape (tuple)：数组的新形状。
+
+        返回：
+            NDArray：调整形状后与原数组共享内存的数组。"""
 
         ### BEGIN YOUR SOLUTION
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
     def permute(self, new_axes: tuple[int, ...]) -> "NDArray":
-        """
-        Permute order of the dimensions.  new_axes describes a permuation of the
-        existing axes, so e.g.:
-          - If we have an array with dimension "BHWC" then .permute((0,3,1,2))
-            would convert this to "BCHW" order.
-          - For a 2D array, .permute((1,0)) would transpose the array.
-        Like reshape, this operation should not copy memory, but achieves the
-        permuting by just adjusting the shape/strides of the array.  That is,
-        it returns a new array that has the dimensions permuted as desired, but
-        which points to the same memroy as the original array.
+        """置换各维度的顺序。
 
-        Args:
-            new_axes (tuple): permuation order of the dimensions
+        new_axes 指定原有轴的排列顺序，例如：
+            - 对于维度顺序为 BHWC 的数组，permute((0, 3, 1, 2)) 将其变为 BCHW。
+            - 对于二维数组，permute((1, 0)) 即转置。
+        与 reshape 一样，该操作只调整 shape/strides，不复制内存。
+        返回的新数组按要求排列维度，但仍指向原数组的内存。
 
-        Returns:
-            NDarray : new NDArray object with permuted dimensions, pointing
-            to the same memory as the original NDArray (i.e., just shape and
-            strides changed).
-        """
+        参数：
+            new_axes (tuple)：维度的排列顺序。
+
+        返回：
+            NDArray：维度置换后的新数组，与原数组共享内存，仅形状和步长改变。"""
 
         ### BEGIN YOUR SOLUTION
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
     def broadcast_to(self, new_shape: tuple[int, ...]) -> "NDArray":
-        """
-        Broadcast an array to a new shape.  new_shape's elements must be the
-        same as the original shape, except for dimensions in the self where
-        the size = 1 (which can then be broadcast to any size).  As with the
-        previous calls, this will not copy memory, and just achieves
-        broadcasting by manipulating the strides.
+        """将数组广播到新形状。
 
-        Raises:
-            assertion error if new_shape[i] != shape[i] for all i where
-            shape[i] != 1
+        除原数组中大小为 1 的维度可广播到任意大小外，new_shape 的各项必须
+        与原形状一致。与前面的操作一样，只调整步长，不复制内存。
 
-        Args:
-            new_shape (tuple): shape to broadcast to
+        异常：
+            AssertionError：对于任意 shape[i] != 1 的维度，
+                若 new_shape[i] != shape[i]，则触发断言。
 
-        Returns:
-            NDArray: the new NDArray object with the new broadcast shape; should
-            point to the same memory as the original array.
-        """
+        参数：
+            new_shape (tuple)：广播的目标形状。
+
+        返回：
+            NDArray：具有广播后形状的新数组，与原数组共享内存。"""
 
         ### BEGIN YOUR SOLUTION
         raise NotImplementedError()
         ### END YOUR SOLUTION
 
-    ### Get and set elements
+    ### 读取和设置元素
 
     def process_slice(self, sl: slice, dim: int) -> slice:
-        """Convert a slice to an explicit start/stop/step"""
+        """将切片转换为具有显式 start/stop/step 的形式。"""
         start, stop, step = sl.start, sl.stop, sl.step
         if start is None:
             start = 0
@@ -330,43 +311,34 @@ class NDArray:
         if step is None:
             step = 1
 
-        # we're not gonna handle negative strides and that kind of thing
+        # 不处理负步长等情况
         assert stop > start, "Start must be less than stop"
         assert step > 0, "No support for  negative increments"
         return slice(start, stop, step)
 
     def __getitem__(self, idxs: int | slice | tuple[int | slice, ...]) -> "NDArray":
-        """
-        The __getitem__ operator in Python allows us to access elements of our
-        array.  When passed notation such as a[1:5,:-1:2,4,:] etc, Python will
-        convert this to a tuple of slices and integers (for singletons like the
-        '4' in this example).  Slices can be a bit odd to work with (they have
-        three elements .start .stop .step), which can be None or have negative
-        entries, so for simplicity we wrote the code for you to convert these
-        to always be a tuple of slices, one of each dimension.
+        """通过 Python 的 __getitem__ 操作访问数组元素。
 
-        For this tuple of slices, return an array that subsets the desired
-        elements.  As before, this can be done entirely through compute a new
-        shape, stride, and offset for the new "view" into the original array,
-        pointing to the same memory
+        对于 a[1:5, :-1:2, 4, :] 这样的表达式，Python 会将索引转换为由
+        切片和整数（例如这里的 4）组成的元组。切片的 start、stop、step
+        可能为 None 或负数。为简化实现，已提供代码将这些索引规范化为
+        切片元组，每个维度对应一个切片。
 
-        Raises:
-            AssertionError if a slice has negative size or step, or if number
-            of slices is not equal to the number of dimension (the stub code
-            already raises all these errors.
+        根据该元组返回所需的数组子集。只需计算新视图的 shape、strides
+        和 offset，使其指向原数组的相应元素，无需复制内存。
 
-        Args:
-            idxs tuple: (after stub code processes), a tuple of slice elements
-            coresponding to the subset of the matrix to get
+        异常：
+            AssertionError：切片大小或步长不符合要求，或切片数不等于维度数。
+                提供的骨架代码已经包含这些检查。
 
-        Returns:
-            NDArray: a new NDArray object corresponding to the selected
-            subset of elements.  As before, this should not copy memroy but just
-            manipulate the shape/strides/offset of the new array, referecing
-            the same array as the original one.
-        """
+        参数：
+            idxs (tuple)：经骨架代码处理后，为表示目标子集的切片元组。
 
-        # handle singleton as tuple, everything as slices
+        返回：
+            NDArray：对应所选元素子集的新数组。仅调整形状、步长和偏移量，
+                与原数组共享内存。"""
+
+        # 将单个索引包装为元组，并把所有索引转换为切片
         if not isinstance(idxs, tuple):
             idxs = (idxs,)
         idxs = tuple(
@@ -386,8 +358,7 @@ class NDArray:
         ### END YOUR SOLUTION
 
     def __setitem__(self, idxs: int | slice | tuple[int | slice, ...], other: Union["NDArray", float]) -> None:
-        """Set the values of a view into an array, using the same semantics
-        as __getitem__()."""
+        """设置数组视图中的值，索引语义与 __getitem__() 相同。"""
         view = self.__getitem__(idxs)
         if isinstance(other, NDArray):
             assert prod(view.shape) == prod(other.shape)
@@ -408,7 +379,7 @@ class NDArray:
                 view._offset,
             )
 
-    ### Collection of elementwise and scalar function: add, multiply, boolean, etc
+    ### 逐元素和标量操作：加法、乘法、布尔运算等
 
     def ewise_or_scalar(
         self,
@@ -416,9 +387,7 @@ class NDArray:
         ewise_func: Callable[[Any, Any, Any], None],
         scalar_func: Callable[[Any, Any, Any], None],
     ) -> "NDArray":
-        """Run either an elementwise or scalar version of a function,
-        depending on whether "other" is an NDArray or scalar
-        """
+        """根据 other 是 NDArray 还是标量，调用对应的逐元素或标量版本函数。"""
         out = NDArray.make(self.shape, device=self.device)
         if isinstance(other, NDArray):
             assert self.shape == other.shape, "operation needs two equal-sized arrays"
@@ -465,7 +434,7 @@ class NDArray:
             other, self.device.ewise_maximum, self.device.scalar_maximum
         )
 
-    ### Binary operators all return (0.0, 1.0) floating point values, could of course be optimized
+    ### 比较运算均返回 0.0 或 1.0 浮点值；此处仍有优化空间
     def __eq__(self, other: Any) -> "NDArray":  # type: ignore[override]
         return self.ewise_or_scalar(other, self.device.ewise_eq, self.device.scalar_eq)
 
@@ -484,7 +453,7 @@ class NDArray:
     def __le__(self, other: Any) -> "NDArray":
         return 1 - (self > other)
 
-    ### Elementwise functions
+    ### 逐元素函数
 
     def log(self) -> "NDArray":
         out = NDArray.make(self.shape, device=self.device)
@@ -501,30 +470,26 @@ class NDArray:
         self.device.ewise_tanh(self.compact()._handle, out._handle)
         return out
 
-    ### Matrix multiplication
+    ### 矩阵乘法
     def __matmul__(self, other: "NDArray") -> "NDArray":
-        """Matrix multplication of two arrays.  This requires that both arrays
-        be 2D (i.e., we don't handle batch matrix multiplication), and that the
-        sizes match up properly for matrix multiplication.
+        """计算两个数组的矩阵乘积。
 
-        In the case of the CPU backend, you will implement an efficient "tiled"
-        version of matrix multiplication for the case when all dimensions of
-        the array are divisible by self.device.__tile_size__.  In this case,
-        the code below will restride and compact the matrix into tiled form,
-        and then pass to the relevant CPU backend.  For the CPU version we will
-        just fall back to the naive CPU implementation if the array shape is not
-        a multiple of the tile size
+        两个数组必须均为二维（不支持批量矩阵乘法），且相应维度大小必须匹配。
 
-        The GPU (and numpy) versions don't have any tiled version (or rather,
-        the GPU version will just work natively by tiling any input size).
-        """
+        对于 CPU 后端，当所有维度大小都能被 self.device.__tile_size__ 整除时，
+        需要实现高效的分块矩阵乘法。下方代码会调整步长并执行 compact，
+        将矩阵转换成分块形式，再传递给对应的 CPU 后端函数。
+        若矩阵维度不能被分块大小整除，则回退到朴素 CPU 实现。
+
+        GPU 和 NumPy 后端不提供单独的分块接口；GPU 后端可以在内部对任意
+        大小的输入进行分块。"""
 
         assert self.ndim == 2 and other.ndim == 2
         assert self.shape[1] == other.shape[0]
 
         m, n, p = self.shape[0], self.shape[1], other.shape[1]
 
-        # if the matrix is aligned, use tiled matrix multiplication
+        # 若矩阵各维度满足分块要求，则使用分块矩阵乘法
         if hasattr(self.device, "matmul_tiled") and all(
             d % self.device.__tile_size__ == 0 for d in (m, n, p)
         ):
@@ -554,9 +519,9 @@ class NDArray:
             )
             return out
 
-    ### Reductions, i.e., sum/max over all element or over given axis
+    ### 归约：对所有元素或沿指定轴求和、求最大值
     def reduce_view_out(self, axis: int | tuple[int, ...] | list[int] | None, keepdims: bool = False) -> tuple["NDArray", "NDArray"]:
-        """ Return a view to the array set up for reduction functions and output array. """
+        """返回适用于归约操作的输入视图，以及用于保存结果的输出数组。"""
         if isinstance(axis, tuple) and not axis:
             raise ValueError("Empty axis in reduce")
 
@@ -594,7 +559,7 @@ class NDArray:
 
 
 def array(a: Any, dtype: str = "float32", device: BackendDevice | None = None) -> NDArray:
-    """Convenience methods to match numpy a bit more closely."""
+    """提供与 NumPy 接口更接近的便捷方法。"""
     dtype = "float32" if dtype is None else dtype
     assert dtype == "float32"
     return NDArray(a, device=device)
