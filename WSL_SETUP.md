@@ -33,7 +33,7 @@ HW3 尚在进行中，测试收集和 CUDA 基础检查用于确认环境，不�
 
 Toolkit 安装在 `hw3/.tools/cuda-13.0.2`，由仓库现有安装脚本下载并校验 SHA-256；不安装 Linux NVIDIA 驱动。系统使用 Windows 提供的 WSL GPU 驱动。
 
-本机 `~/.config/nushell/config.nu` 已加载 `scripts/wsl-env.nu`，新开 Nushell 终端即可使用。迁移到其他机器时，在 Nushell 的 `config.nu` 中添加 `source /你的仓库路径/scripts/wsl-env.nu`（使用实际绝对路径）。当前已打开的终端执行：
+本机 `~/.config/nushell/config.nu` 已加载 `scripts/wsl-env.nu`，新开 Nushell 终端即可使用。迁移到其他机器时，在 Nushell 的 `config.nu` 中添加 `source /你的仓库路径/scripts/wsl-env.nu`（使用实际绝对路径）。脚本需在 `use mise.nu` 之后加载，并在提示符和目录变更钩子中恢复 CUDA 路径，避免 mise 重写 PATH 后丢失 `nvcc`。当前已打开的终端执行：
 
 ```nu
 source scripts/wsl-env.nu   # 在仓库根目录执行
