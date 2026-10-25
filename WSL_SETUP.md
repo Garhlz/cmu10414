@@ -27,13 +27,13 @@ uv run pytest --collect-only -q
 uv run python scripts/check_cuda.py  # 仅 HW3
 ```
 
-HW3 尚在进行中，测试收集和 CUDA 基础检查用于确认环境，不代表全部作业测试通过。只运行已实现功能的测试；环境配置不修改作业解答。
+HW3 已完成并通过全部 140 项 CPU/CUDA 本地测试；正式课程提交仍需按 notebook 运行 mugrade 并上传源码归档。
 
 ## CUDA 与普通终端
 
 Toolkit 安装在 `hw3/.tools/cuda-13.0.2`，由仓库现有安装脚本下载并校验 SHA-256；不安装 Linux NVIDIA 驱动。系统使用 Windows 提供的 WSL GPU 驱动。
 
-本机 `~/.config/nushell/config.nu` 已加载 `scripts/wsl-env.nu`，新开 Nushell 终端即可使用。迁移到其他机器时，在 Nushell 的 `config.nu` 中添加 `source /你的仓库路径/scripts/wsl-env.nu`（使用实际绝对路径）。脚本需在 `use mise.nu` 之后加载，并在提示符和目录变更钩子中恢复 CUDA 路径，避免 mise 重写 PATH 后丢失 `nvcc`。当前已打开的终端执行：
+本机 `~/.config/nushell/env.nu` 按基础 PATH → CUDA → `mise activate nu` 的顺序设置环境，每次启动重新生成 `mise.nu`；`config.nu` 加载该模块，不再重设 PATH，也不再添加 CUDA 恢复钩子。新开 Nushell 终端即可使用。迁移到其他机器时，在 `env.nu` 中设置实际的 CUDA 路径，或在生成 mise 模块之前加载 `scripts/wsl-env.nu`。当前已打开的终端建议重新启动 Nushell，以清除旧会话中的恢复钩子；仅临时启用 CUDA 可执行：
 
 ```nu
 source scripts/wsl-env.nu   # 在仓库根目录执行
@@ -59,5 +59,5 @@ WSL 端已安装并核实 Python、Pylance、debugpy、Jupyter、Ruff、clangd �
 - HW0：C++ 扩展编译成功，`test_add` 通过。
 - HW1：29 个测试可收集，12 个 forward 测试通过。
 - HW2：93 个测试可收集，7 个 power-scalar / logsumexp forward 测试通过。
-- HW3：CPU/CUDA 扩展均编译成功，140 个测试可收集；RTX 4060 上 CUDA 导入、内存传输与 Fill kernel 检查通过；clangd CUDA 源码检查退出码为 0。
+- HW3：CPU/CUDA 扩展均编译成功，140 项测试全部通过、无跳过，Ruff 检查通过；RTX 4060 上 CUDA 导入、内存传输与 Fill kernel 检查通过；clangd CUDA 源码检查退出码为 0。
 - 新 Nushell 终端可直接找到项目本地 `nvcc`。
