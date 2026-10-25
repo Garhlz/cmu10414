@@ -25,7 +25,33 @@
         "path": "/usr/bin/nu"
       }
     },
-    "terminal.integrated.defaultProfile.linux": "Nushell"
+    "terminal.integrated.defaultProfile.linux": "Nushell",
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true,
+    "editor.detectIndentation": false,
+    "editor.guides.indentation": false,
+    "editor.guides.highlightActiveIndentation": false,
+    "[c]": {
+      "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+      "editor.formatOnSave": true,
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true,
+      "editor.detectIndentation": false
+    },
+    "[cpp]": {
+      "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+      "editor.formatOnSave": true,
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true,
+      "editor.detectIndentation": false
+    },
+    "[cuda-cpp]": {
+      "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
+      "editor.formatOnSave": true,
+      "editor.tabSize": 4,
+      "editor.insertSpaces": true,
+      "editor.detectIndentation": false
+    }
   },
   "extensions": {
     "recommendations": [
