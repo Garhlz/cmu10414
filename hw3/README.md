@@ -33,23 +33,17 @@ uv run pytest --collect-only -q
 uv run jupyter notebook
 ```
 
-课程的 `pytest.ini` 已将 `python/` 加入模块搜索路径。C++ 骨架部分包含 `assert(false)` 占位，未实现时执行对应测试可能直接中止 Python 进程。初始化阶段先验证构建、导入、已有的内存分配/填充和测试收集，之后按已实现部分筛选测试：
-
-```bash
-# 实现对应功能并重新构建后运行
-uv run pytest -q -k 'test_permute and cpu'
-uv run pytest -q -k 'test_compact and cpu'
-uv run pytest -q -k 'test_matmul and cpu'
-```
-
-本次初始化已成功收集 **140 项测试**，CPU 扩展的分配、填充和 NumPy 回读检查通过，clangd 对 CPU 源码检查为 0 个错误。尚未执行未完成题目的完整计算测试。
-
-完成全部部分后再运行完整测试：
+课程的 `pytest.ini` 已将 `python/` 加入模块搜索路径。Python 数组视图、CPU 和 CUDA 后端均已实现；完整验证命令为：
 
 ```bash
 uv run make
 uv run pytest -q
+uv run ruff check python tests
 ```
+
+本机 WSL / RTX 4060 已通过全部 **140 项 CPU/CUDA 测试**，无跳过；Ruff 检查通过。CUDA 后端包括 compact、视图赋值、逐元素和标量运算、共享内存树形归约，以及 16×16 分块矩阵乘法。归约与矩阵乘法包含中文注释，说明协作取数、共享内存和线程同步。
+
+本地测试通过不等同于课程平台评分；正式提交仍需按 notebook 执行各部分 mugrade 提交，并运行 `make_archive.py` 生成源码归档。
 
 ## CUDA
 
@@ -72,7 +66,7 @@ uv run python scripts/check_cuda.py
 
 `setup_clangd.py` 从 LLVM clangd 官方发布下载 23.1.0 并校验 SHA-256，约 112 MiB 压缩包。旧版 clangd 对 CUDA 13 的兼容性不足，本机 VS Code 已将 `clangd.path` 指向 `.tools/clangd_23.1.0/bin/clangd`；重新打开工作区或执行 `clangd: Restart language server` 后生效。
 
-`check_cuda.py` 验证扩展导入、显存分配、数据传输和骨架已有的 Fill kernel，不调用尚待实现的计算算子。本机 RTX 4060 已通过这些检查，CUDA 源码的 clangd 解析检查为 0 个错误。
+`check_cuda.py` 验证扩展导入、显存分配、数据传输和骨架已有的 Fill kernel，用于单独验证 GPU 环境，完整计算正确性由 pytest 检查。本机 RTX 4060 已通过这些检查，CUDA 源码的 clangd 解析检查为 0 个错误。
 
 CMake 原生 CUDA 构建默认生成架构 75、86、89 的代码，覆盖课程 T4、Ampere 及本机 RTX 4060。也可指定本机架构后构建：
 
